@@ -15,6 +15,32 @@ jobs:
       - name: Trigger Render deploy
         run: curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
 
+      - name: Wait for Render deploy & health check
+        run: |
+          echo "Waiting 90s for Render to rebuild..."
+          sleep 90
+
+          MAX_RETRIES=10
+          RETRY_INTERVAL=30
+          URL="https://devops-app-uz43.onrender.com/actuator/health"
+
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Health check attempt $i of $MAX_RETRIES..."
+
+            RESPONSE=$(curl --silent --max-time 10 "$URL" || echo "")
+
+            if echo "$RESPONSE" | grep -q '"status":"UP"'; then
+              echo "Health check passed!"
+              exit 0
+            else
+              echo "Not healthy yet. Response: $RESPONSE"
+              sleep $RETRY_INTERVAL
+            fi
+          done
+
+          echo "💀 Health check failed after $MAX_RETRIES attempts."
+          exit 1
+
       - name: Deployment summary
         run: |
           echo "## Deployment Triggered" >> $GITHUB_STEP_SUMMARY
